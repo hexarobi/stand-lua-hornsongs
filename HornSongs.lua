@@ -1,84 +1,62 @@
--- HornSongs v1.1
+-- HornSongs
 -- by Hexarobi
 -- Install in `Stand/Lua Scripts`
 
+local SCRIPT_NAME = "HornSongs"
+local SCRIPT_VERSION = "1.2"
+local SOURCE_URL = "https://github.com/hexarobi/stand-lua-hornsongs"
+local AUTO_UPDATE_HOST = "raw.githubusercontent.com"
+local AUTO_UPDATE_PATH = "/hexarobi/stand-lua-hornsongs/main/HornSongs.lua"
+
 util.require_natives(1660775568)
 
-local pause=0
+local pitch_map = {
+    rest = 0,
+    C = 16,
+    D = 17,
+    E = 18,
+    F = 19,
+    G = 20,
+    A = 21,
+    B = 22,
+    C2 = 23,
+}
 
-local do1=16
-local re=17
-local mi=18
-local fa=19
-local sol=20
-local la=21
-local ti=22
-local do2=23
-
-local C1 = 16
-local D1 = 17
-local E1 = 18
-local F1 = 19
-local G1 = 20
-local A1 = 21
-local B1 = 22
-local C2 = 23
-
+local double = 2
 local whole = 1
-local half = 2
-local quarter = 4
-local eighth = 8
-local sixteenth = 16
+local half = 0.5
+local quarter = 0.25
+local eighth = 0.125
+local sixteenth = 0.0625
 
 local MOD_HORN = 14
 
 local horn_on = false
 
-local songs = {
-    {
-        -- From https://www.easymusicnotes.com/pdf-piano-1/twinkle-twinkle-little-star-classical-mozart-piano-level-1.pdf
-        name = "Twinkle Twinkle Little Star",
-        bpm = 90,
-        notes = {
-            pause,
-            do1, do1, sol, sol, la, la, { pitch = sol, length = half }, pause,
-            fa, fa, mi, mi, re, re, { pitch = do1, length = half }, pause,
-            sol, sol, fa, fa, mi, mi, { pitch = re, length = half }, pause,
-            sol, sol, fa, fa, mi, mi, { pitch = re, length = half }, pause,
-            do1, do1, sol, sol, la, la, { pitch = sol, length = half }, pause,
-            fa, fa, mi, mi, re, re, { pitch = do1, length = half }, pause,
-        },
-    },
-    {
-        -- From https://www.easymusicnotes.com/pdf-piano-1/au-claire-de-la-lune-children-traditional-piano-level-1.pdf
-        name = "Au Claire De La Lune",
-        bpm = 60,
-        notes = {
-            fa, fa, fa, sol, { pitch = la, length = half }, { pitch = sol, length = half },
-            fa, la, sol, sol, { pitch = fa, length = whole },
-            fa, fa, fa, sol,  { pitch = la, length = half }, { pitch = sol, length = half },
-            fa, la, sol, sol, { pitch = fa, length = whole },
-        },
-    },
-    {
-        -- From https://www.easymusicnotes.com/pdf-piano-1/hot-cross-buns-children-traditional-piano-level-1.pdf
-        name = "Hot Cross Buns",
-        bpm = 60,
-        notes = {
-            { pitch = mi, length = half }, { pitch = re, length = half },
-            { pitch = do1, length = half }, { pitch = pause, length = half },
-            { pitch = mi, length = half }, { pitch = re, length = half },
-            { pitch = do1, length = half }, { pitch = pause, length = half },
-            do1, do1, do1, do1, re, re, re, re,
-            { pitch = mi, length = half }, { pitch = re, length = half },
-            { pitch = do1, length = half }, { pitch = pause, length = half },
-        },
-    },
-}
+local script_store_dir = filesystem.store_dir() .. SCRIPT_NAME .. '\\'
+if not filesystem.is_dir(script_store_dir) then
+    filesystem.mkdirs(script_store_dir)
+end
+
+local function join_path(parent, child)
+    local sub = parent:sub(-1)
+    if sub == "/" or sub == "\\" then
+        return parent .. child
+    else
+        return parent .. "/" .. child
+    end
+end
+
+---
+--- Play Music
+---
 
 local function get_note(note)
     if type(note) ~= "table" then
         note = {pitch=note}
+    end
+    if type(note.pitch) ~= "number" then
+        note.pitch = pitch_map[note.pitch]
     end
     if note.length == nil then
         note.length = quarter
@@ -88,8 +66,8 @@ end
 
 local function play_note(vehicle, song, note, index)
     note = get_note(note)
-    local note_playtime = math.floor(song.beat_length / note.length)
-    if note.pitch ~= pause then
+    local note_playtime = math.floor(song.beat_length * note.length)
+    if note.pitch ~= rest then
         horn_on = true
         --VEHICLE.START_VEHICLE_HORN(vehicle, note_delay, util.joaat("HELDDOWN"), false)
     end
@@ -98,7 +76,7 @@ local function play_note(vehicle, song, note, index)
     -- Que up pitch for next note
     if song.notes[index+1] ~= nil then
         local next_note = get_note(song.notes[index+1])
-        if next_note.pitch ~= pause then
+        if next_note.pitch ~= rest then
             VEHICLE.SET_VEHICLE_MOD(vehicle, MOD_HORN, next_note.pitch)
         end
     end
@@ -114,6 +92,7 @@ local function play_song(song)
     local vehicle = PED.GET_VEHICLE_PED_IS_IN(PLAYER.PLAYER_PED_ID(), false)
     if vehicle then
         local original_horn = VEHICLE.GET_VEHICLE_MOD(vehicle, MOD_HORN)
+        play_note(vehicle, song, rest, 0)
         for index, note in pairs(song.notes) do
             play_note(vehicle, song, note, index)
         end
@@ -121,11 +100,122 @@ local function play_song(song)
     end
 end
 
+---
+--- Songs Menu
+---
+
+local songs_menu = menu.list(menu.my_root(), "Play Song")
+
+local status, json = pcall(require, "json")
+local function load_song_from_file(filepath)
+    local file = io.open(filepath, "r")
+    if file then
+        local data = json.decode(file:read("*a"))
+        if not data.target_version then
+            util.toast("Invalid horn file format. Missing target_version.")
+            return nil
+        end
+        file:close()
+        return data
+    else
+        error("Could not read file '" .. filepath .. "'")
+    end
+end
+
+local function load_songs(directory)
+    local loaded_songs = {}
+    for _, filepath in ipairs(filesystem.list_files(directory)) do
+        local _, filename, ext = string.match(filepath, "(.-)([^\\/]-%.?([^%.\\/]*))$")
+        if not filesystem.is_dir(filepath) and ext == "horn" then
+            table.insert(loaded_songs, load_song_from_file(filepath))
+        end
+    end
+    return loaded_songs
+end
+
+local songs_dir = join_path(script_store_dir, "songs")
+songs = load_songs(songs_dir)
 for _, song in pairs(songs) do
-    menu.action(menu.my_root(), "Play "..song.name, {}, "Spawns a car and plays song on its horn.", function()
+    menu.action(songs_menu, "Play "..song.name, {}, song.description .. "\nBPM: " .. song.bpm, function()
         play_song(song)
     end)
 end
+
+---
+--- Script Meta
+---
+
+local script_meta_menu = menu.list(menu.my_root(), "Script Meta")
+
+menu.divider(script_meta_menu, SCRIPT_NAME)
+menu.readonly(script_meta_menu, "Version", SCRIPT_VERSION)
+menu.hyperlink(script_meta_menu, "Source", SOURCE_URL, "View source files on Github")
+
+local version_file = join_path(script_store_dir, "version.txt")
+
+local function read_version_id()
+    local f = io.open(version_file)
+    if f then
+        local version = f:read()
+        f:close()
+        return version
+    end
+end
+
+local function write_version_id(version_id)
+    local file = io.open(version_file, "wb")
+    if file == nil then
+        util.toast("Error saving version id")
+    end
+    file:write(version_id)
+    file:close()
+end
+
+local function replace_current_script(new_script)
+    local file = io.open(filesystem.scripts_dir() .. SCRIPT_RELPATH, "wb")
+    if file == nil then
+        util.toast("Error opening script file for writing")
+    end
+    file:write(new_script.."\n")
+    file:close()
+end
+
+menu.action(script_meta_menu, "Check for Update", {}, "Attempt to update to latest version", function()
+    async_http.init(AUTO_UPDATE_HOST, AUTO_UPDATE_PATH, function(result, status_code, headers)
+        if status_code == 304 then
+            -- No update found
+            return
+        end
+        if not result or result == "" then
+            util.toast("No update available.")
+            return
+        end
+        -- Lua scripts should begin with a comment but other HTML responses will not
+        if not string.starts(result, "--") then
+            util.toast("Invalid update found! Cannot apply")
+            util.toast(result)
+            return
+        end
+        replace_current_script(result)
+        if headers then
+            for header_key, header_value in pairs(headers) do
+                if header_key == "etag" then
+                    write_version_id(header_value)
+                end
+            end
+        end
+        -- write_version_id('W/"f0e184e9746c341efd4be01c36825cdf28bb3036c4bc744f1dbbe11c3c3e3031"')
+        util.toast("Script updated. Please restart.")
+        util.stop_script()
+    end, function()
+        util.toast("Script update failed to download.")
+    end)
+    local cached_version_id = read_version_id()
+    if cached_version_id then
+        async_http.add_header("If-None-Match", cached_version_id)
+    end
+    async_http.dispatch()
+end)
 
 util.create_tick_handler(function()
     if horn_on then
