@@ -2,7 +2,7 @@
 -- by Hexarobi
 -- Install in `Stand/Lua Scripts`
 
-local SCRIPT_VERSION = "1.4"
+local SCRIPT_VERSION = "1.5"
 local SOURCE_URL = "https://github.com/hexarobi/stand-lua-hornsongs"
 local RAW_SOURCE_URL = "https://raw.githubusercontent.com/hexarobi/stand-lua-hornsongs/main/HornSongs.lua"
 
@@ -165,12 +165,11 @@ local function require_or_download(lib_name, download_source_host, download_sour
         local file = io.open(filesystem.scripts_dir() .. "lib\\" .. lib_name .. ".lua", "wb")
         if file == nil then util.toast(error_prefix.."Could not open file for writing.") return false end
         file:write(result) file:close()
-        util.toast("Installed lib "..lib_name..". Stopping script...")
-        util.yield(2900)        -- Pause to allow for other lib downloads to finish
-        util.stop_script()      -- TODO: Change to restart instead of stop once added to util
+        util.toast("Successfully installed lib "..lib_name)
     end, function() util.toast("Error downloading "..lib_name..". Update failed to download.") end)
     async_http.dispatch()
-    util.yield(3000)
+    util.yield(3000)    -- Pause to let download finish before continuing
+    require(lib_name)
 end
 
 require_or_download(
@@ -198,4 +197,3 @@ util.create_tick_handler(function()
     end
     return true
 end)
-
