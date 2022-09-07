@@ -1,4 +1,4 @@
-# stand-lua-hornsongs
+# HornSongs
 
 A Lua Script for the Stand mod menu for GTA5.
 
