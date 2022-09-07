@@ -2,11 +2,8 @@
 -- by Hexarobi
 -- Install in `Stand/Lua Scripts`
 
-local SCRIPT_NAME = "HornSongs"
-local SCRIPT_VERSION = "1.2"
+local SCRIPT_VERSION = "1.3"
 local SOURCE_URL = "https://github.com/hexarobi/stand-lua-hornsongs"
-local AUTO_UPDATE_HOST = "raw.githubusercontent.com"
-local AUTO_UPDATE_PATH = "/hexarobi/stand-lua-hornsongs/main/HornSongs.lua"
 
 util.require_natives(1660775568)
 
@@ -149,79 +146,24 @@ end
 
 local script_meta_menu = menu.list(menu.my_root(), "Script Meta")
 
-menu.divider(script_meta_menu, SCRIPT_NAME)
+menu.divider(script_meta_menu, SCRIPT_NAME:gsub(".lua", ""))
 menu.readonly(script_meta_menu, "Version", SCRIPT_VERSION)
 menu.hyperlink(script_meta_menu, "Source", SOURCE_URL, "View source files on Github")
 
-local version_file = join_path(script_store_dir, "version.txt")
-
-local function read_version_id()
-    local f = io.open(version_file)
-    if f then
-        local version = f:read()
-        f:close()
-        return version
-    end
-end
-
-local function write_version_id(version_id)
-    local file = io.open(version_file, "wb")
-    if file == nil then
-        util.toast("Error saving version id")
-    end
-    file:write(version_id)
-    file:close()
-end
-
-local function replace_current_script(new_script)
-    local file = io.open(filesystem.scripts_dir() .. SCRIPT_RELPATH, "wb")
-    if file == nil then
-        util.toast("Error opening script file for writing")
-    end
-    file:write(new_script.."\n")
-    file:close()
-end
-
-function string.starts(String,Start)
-    return string.sub(String,1,string.len(Start))==Start
-end
-
+require("auto-updater")
+local auto_update_config = {
+    source_host="raw.githubusercontent.com",    -- If hosted on GitHub this should be `raw.githubusercontent.com`
+    source_path="/hexarobi/stand-lua-hornsongs/main/HornSongs.lua",
+    script_name=SCRIPT_NAME,
+    script_relpath=SCRIPT_RELPATH,
+}
+-- Manually check for updates with a menu option
 menu.action(script_meta_menu, "Check for Update", {}, "Attempt to update to latest version", function()
-    async_http.init(AUTO_UPDATE_HOST, AUTO_UPDATE_PATH, function(result, status_code, headers)
-        if status_code == 304 then
-            -- No update found
-            return
-        end
-        if not result or result == "" then
-            util.toast("No update available.")
-            return
-        end
-        -- Lua scripts should begin with a comment but other HTML responses will not
-        if not string.starts(result, "--") then
-            util.toast("Invalid update found! Cannot apply")
-            util.toast(result)
-            return
-        end
-        replace_current_script(result)
-        if headers then
-            for header_key, header_value in pairs(headers) do
-                if header_key == "etag" then
-                    write_version_id(header_value)
-                end
-            end
-        end
-        -- write_version_id('W/"f0e184e9746c341efd4be01c36825cdf28bb3036c4bc744f1dbbe11c3c3e3031"')
-        util.toast("Script updated. Please restart.")
-        util.stop_script()
-    end, function()
-        util.toast("Script update failed to download.")
-    end)
-    local cached_version_id = read_version_id()
-    if cached_version_id then
-        async_http.add_header("If-None-Match", cached_version_id)
-    end
-    async_http.dispatch()
+    auto_update(auto_update_config)
 end)
+
+-- Check for updates anytime the script is run
+auto_update(auto_update_config)
 
 util.create_tick_handler(function()
     if horn_on then
