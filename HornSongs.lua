@@ -22,6 +22,8 @@ local pitch_map = {
     C2 = 23,
 }
 
+local rest = 0
+
 local double = 2
 local whole = 1
 local half = 0.5
