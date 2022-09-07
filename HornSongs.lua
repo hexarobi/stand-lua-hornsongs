@@ -182,6 +182,10 @@ local function replace_current_script(new_script)
     file:close()
 end
 
+function string.starts(String,Start)
+    return string.sub(String,1,string.len(Start))==Start
+end
+
 menu.action(script_meta_menu, "Check for Update", {}, "Attempt to update to latest version", function()
     async_http.init(AUTO_UPDATE_HOST, AUTO_UPDATE_PATH, function(result, status_code, headers)
         if status_code == 304 then
