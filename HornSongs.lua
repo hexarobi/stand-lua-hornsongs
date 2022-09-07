@@ -2,8 +2,9 @@
 -- by Hexarobi
 -- Install in `Stand/Lua Scripts`
 
-local SCRIPT_VERSION = "1.3"
+local SCRIPT_VERSION = "1.4"
 local SOURCE_URL = "https://github.com/hexarobi/stand-lua-hornsongs"
+local RAW_SOURCE_URL = "https://raw.githubusercontent.com/hexarobi/stand-lua-hornsongs/main/HornSongs.lua"
 
 util.require_natives(1660775568)
 
@@ -150,10 +151,36 @@ menu.divider(script_meta_menu, SCRIPT_NAME:gsub(".lua", ""))
 menu.readonly(script_meta_menu, "Version", SCRIPT_VERSION)
 menu.hyperlink(script_meta_menu, "Source", SOURCE_URL, "View source files on Github")
 
-require("auto-updater")
+---
+--- Auto Update
+---
+
+local function require_or_download(lib_name, download_source_host, download_source_path)
+    local status, lib = pcall(require, lib_name)
+    if (status) then return lib end
+    async_http.init(download_source_host, download_source_path, function(result, headers, status_code)
+        local error_prefix = "Error downloading "..lib_name..": "
+        if status_code ~= 200 then util.toast(error_prefix..status_code) return false end
+        if not result or result == "" then util.toast(error_prefix.."Found empty file.") return false end
+        local file = io.open(filesystem.scripts_dir() .. "lib\\" .. lib_name .. ".lua", "wb")
+        if file == nil then util.toast(error_prefix.."Could not open file for writing.") return false end
+        file:write(result) file:close()
+        util.toast("Installed lib "..lib_name..". Stopping script...")
+        util.yield(2900)        -- Pause to allow for other lib downloads to finish
+        util.stop_script()      -- TODO: Change to restart instead of stop once added to util
+    end, function() util.toast("Error downloading "..lib_name..". Update failed to download.") end)
+    async_http.dispatch()
+    util.yield(3000)
+end
+
+require_or_download(
+    "auto-updater",
+    "raw.githubusercontent.com",
+    "/hexarobi/stand-lua-auto-updater/main/auto-updater.lua"
+)
+
 local auto_update_config = {
-    source_host="raw.githubusercontent.com",    -- If hosted on GitHub this should be `raw.githubusercontent.com`
-    source_path="/hexarobi/stand-lua-hornsongs/main/HornSongs.lua",
+    source_url=RAW_SOURCE_URL,
     script_name=SCRIPT_NAME,
     script_relpath=SCRIPT_RELPATH,
 }
@@ -171,3 +198,4 @@ util.create_tick_handler(function()
     end
     return true
 end)
+
