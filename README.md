@@ -4,6 +4,8 @@ A Lua Script for the Stand mod menu for GTA5.
 
 Plays songs on your vehicles horn.
 
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/5raK9kn4BTo/0.jpg)](https://www.youtube.com/watch?v=5raK9kn4BTo)
+
 # Installation
 
 Download [the project zip file](https://github.com/hexarobi/stand-lua-hornsongs/archive/refs/heads/main.zip) and extract into your `Stand/Lua Scripts` folder
