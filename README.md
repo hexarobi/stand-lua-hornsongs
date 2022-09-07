@@ -8,6 +8,8 @@ Plays songs on your vehicles horn.
 
 Download [the project zip file](https://github.com/hexarobi/stand-lua-hornsongs/archive/refs/heads/main.zip) and extract into your `Stand/Lua Scripts` folder
 
+If not already enabled, make sure to enable the `json` dependency under `Stand > Lua Scripts > Repository > json`
+
 # Add Horn Files
 
 Add new `*.horn` files to `Stand/Lua Scripts/store/HornSongs/songs/`
