@@ -1,10 +1,37 @@
 -- HornSongs
 -- by Hexarobi
--- Install in `Stand/Lua Scripts`
+-- https://github.com/hexarobi/stand-lua-hornsongs
 
-local SCRIPT_VERSION = "1.5"
-local SOURCE_URL = "https://github.com/hexarobi/stand-lua-hornsongs"
-local RAW_SOURCE_URL = "https://raw.githubusercontent.com/hexarobi/stand-lua-hornsongs/main/HornSongs.lua"
+local SCRIPT_VERSION = "1.6"
+
+-- Auto Updater from https://github.com/hexarobi/stand-lua-auto-updater
+local status, auto_updater = pcall(require, "auto-updater")
+if not status then
+    local auto_update_complete = nil util.toast("Installing auto-updater...", TOAST_ALL)
+    async_http.init("raw.githubusercontent.com", "/hexarobi/stand-lua-auto-updater/main/auto-updater.lua",
+            function(result, headers, status_code)
+                local function parse_auto_update_result(result, headers, status_code)
+                    local error_prefix = "Error downloading auto-updater: "
+                    if status_code ~= 200 then util.toast(error_prefix..status_code, TOAST_ALL) return false end
+                    if not result or result == "" then util.toast(error_prefix.."Found empty file.", TOAST_ALL) return false end
+                    filesystem.mkdir(filesystem.scripts_dir() .. "lib")
+                    local file = io.open(filesystem.scripts_dir() .. "lib\\auto-updater.lua", "wb")
+                    if file == nil then util.toast(error_prefix.."Could not open file for writing.", TOAST_ALL) return false end
+                    file:write(result) file:close() util.toast("Successfully installed auto-updater lib", TOAST_ALL) return true
+                end
+                auto_update_complete = parse_auto_update_result(result, headers, status_code)
+            end, function() util.toast("Error downloading auto-updater lib. Update failed to download.", TOAST_ALL) end)
+    async_http.dispatch() local i = 1 while (auto_update_complete == nil and i < 40) do util.yield(250) i = i + 1 end
+    if auto_update_complete == nil then error("Error downloading auto-updater lib. HTTP Request timeout") end
+    auto_updater = require("auto-updater")
+end
+if auto_updater == true then error("Invalid auto-updater lib. Please delete your Stand/Lua Scripts/lib/auto-updater.lua and try again") end
+
+local auto_update_config = {
+    source_url="https://raw.githubusercontent.com/hexarobi/stand-lua-hornsongs/main/HornSongs.lua",
+    script_relpath=SCRIPT_RELPATH,
+}
+auto_updater.run_auto_update(auto_update_config)
 
 util.require_natives(1660775568)
 
@@ -80,7 +107,11 @@ local function play_note(vehicle, song, note, index)
             VEHICLE.SET_VEHICLE_MOD(vehicle, MOD_HORN, next_note.pitch)
         end
     end
-    util.yield(song.beat_length - note_playtime)
+    local beat_length = song.beat_length
+    if note.beat_length ~= nil then
+        beat_length = beat_length * note.beat_length
+    end
+    util.yield(beat_length - note_playtime)
     end
 
 local function play_song(song)
@@ -106,7 +137,7 @@ end
 
 local songs_menu = menu.list(menu.my_root(), "Play Song")
 
-local status, json = pcall(require, "json")
+local _, json = pcall(require, "json")
 local function load_song_from_file(filepath)
     local file = io.open(filepath, "r")
     if file then
@@ -134,7 +165,7 @@ local function load_songs(directory)
 end
 
 local songs_dir = join_path(script_store_dir, "songs")
-songs = load_songs(songs_dir)
+local songs = load_songs(songs_dir)
 for _, song in pairs(songs) do
     menu.action(songs_menu, "Play "..song.name, {}, song.description .. "\nBPM: " .. song.bpm, function()
         play_song(song)
@@ -145,51 +176,24 @@ end
 --- Script Meta
 ---
 
-local script_meta_menu = menu.list(menu.my_root(), "Script Meta")
+local script_meta_menu = menu.list(menu.my_root(), "About HornSongs")
 
-menu.divider(script_meta_menu, SCRIPT_NAME:gsub(".lua", ""))
+menu.divider(script_meta_menu, "HornSongs")
 menu.readonly(script_meta_menu, "Version", SCRIPT_VERSION)
-menu.hyperlink(script_meta_menu, "Source", SOURCE_URL, "View source files on Github")
-
----
---- Auto Update
----
-
-local function require_or_download(lib_name, download_source_host, download_source_path)
-    local status, lib = pcall(require, lib_name)
-    if (status) then return lib end
-    async_http.init(download_source_host, download_source_path, function(result, headers, status_code)
-        local error_prefix = "Error downloading "..lib_name..": "
-        if status_code ~= 200 then util.toast(error_prefix..status_code) return false end
-        if not result or result == "" then util.toast(error_prefix.."Found empty file.") return false end
-        local file = io.open(filesystem.scripts_dir() .. "lib\\" .. lib_name .. ".lua", "wb")
-        if file == nil then util.toast(error_prefix.."Could not open file for writing.") return false end
-        file:write(result) file:close()
-        util.toast("Successfully installed lib "..lib_name)
-    end, function() util.toast("Error downloading "..lib_name..". Update failed to download.") end)
-    async_http.dispatch()
-    util.yield(3000)    -- Pause to let download finish before continuing
-    require(lib_name)
+if auto_update_config ~= nil then
+    menu.action(script_meta_menu, "Check for Update", {}, "The script will automatically check for updates at most daily, but you can manually check using this option anytime.", function()
+        auto_update_config.check_interval = 0
+        if auto_updater.run_auto_update(auto_update_config) then
+            util.toast(t("No updates found"))
+        end
+    end)
+    menu.action(script_meta_menu, "Clean Reinstall", {}, "Force an update to the latest version, regardless of current version.", function()
+        auto_update_config.clean_reinstall = true
+        auto_updater.run_auto_update(auto_update_config)
+    end)
 end
-
-require_or_download(
-    "auto-updater",
-    "raw.githubusercontent.com",
-    "/hexarobi/stand-lua-auto-updater/main/auto-updater.lua"
-)
-
-local auto_update_config = {
-    source_url=RAW_SOURCE_URL,
-    script_name=SCRIPT_NAME,
-    script_relpath=SCRIPT_RELPATH,
-}
--- Manually check for updates with a menu option
-menu.action(script_meta_menu, "Check for Update", {}, "Attempt to update to latest version", function()
-    auto_update(auto_update_config)
-end)
-
--- Check for updates anytime the script is run
-auto_update(auto_update_config)
+menu.hyperlink(script_meta_menu, "GitHub Source", "https://github.com/hexarobi/stand-lua-hornsongs", "View source files on Github")
+menu.hyperlink(script_meta_menu, "Discord", "https://discord.gg/2u5HbHPB9y", "Open Discord Server")
 
 util.create_tick_handler(function()
     if horn_on then
